@@ -51,5 +51,3 @@ The project uses Kotlin/JVM 17, Gradle 8.13, Android Gradle Plugin 8.13.0, and A
 ```sh
 ./gradlew :app:assembleDebug
 ```
-
-The APK is generated at `app/build/outputs/apk/debug/app-debug.apk`.
