@@ -1,0 +1,29 @@
+<resources>
+    <string name="app_name">CornerShot</string>
+    <string name="accessibility_service_name">CornerShot screenshot button</string>
+    <string name="accessibility_service_description">CornerShot uses Accessibility access only to capture the screen when you tap its floating screenshot button. It does not inspect accessibility content.</string>
+    <string name="capture_button">Capture button</string>
+    <string name="accessibility_heading">Accessibility</string>
+    <string name="service_enabled">Enabled</string>
+    <string name="service_disabled">Disabled</string>
+    <string name="open_accessibility_settings">Open Accessibility Settings</string>
+    <string name="button_position">Button position</string>
+    <string name="corner_top_left">Top Left</string>
+    <string name="corner_top_right">Top Right</string>
+    <string name="corner_bottom_left">Bottom Left</string>
+    <string name="corner_bottom_right">Bottom Right</string>
+    <string name="privacy_statement">Screenshots stay on this device. CornerShot has no network access.</string>
+    <string name="capture_content_description">Capture screenshot</string>
+    <string name="save">Save</string>
+    <string name="copy">Copy</string>
+    <string name="retry">Retry</string>
+    <string name="cancel">Cancel</string>
+    <string name="screenshot_saved">Screenshot saved</string>
+    <string name="screenshot_copied">Screenshot copied</string>
+    <string name="capture_failed">This screen cannot be captured.</string>
+    <string name="selection_too_small">Selection is too small.</string>
+    <string name="save_failed">Could not save screenshot.</string>
+    <string name="copy_failed">Could not copy screenshot.</string>
+    <string name="source_unavailable">Screenshot is no longer available.</string>
+    <string name="processing">Processing screenshot</string>
+</resources>

@@ -1,0 +1,5 @@
+<resources>
+    <color name="window_background">#121318</color>
+    <color name="menu_surface">#292A30</color>
+    <color name="menu_text">#F1F0F7</color>
+</resources>

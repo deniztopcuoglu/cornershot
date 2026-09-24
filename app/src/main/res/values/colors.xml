@@ -1,0 +1,6 @@
+<resources>
+    <color name="color_accent">#6750A4</color>
+    <color name="window_background">#FAF9FF</color>
+    <color name="menu_surface">#FFFDFC</color>
+    <color name="menu_text">#1B1B1F</color>
+</resources>
