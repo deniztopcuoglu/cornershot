@@ -7,11 +7,14 @@
     <string name="service_enabled">Enabled</string>
     <string name="service_disabled">Disabled</string>
     <string name="open_accessibility_settings">Open Accessibility Settings</string>
-    <string name="button_position">Button position</string>
+    <string name="button_position">Position presets</string>
     <string name="corner_top_left">Top Left</string>
     <string name="corner_top_right">Top Right</string>
     <string name="corner_bottom_left">Bottom Left</string>
     <string name="corner_bottom_right">Bottom Right</string>
+    <string name="button_size">Button size</string>
+    <string name="button_size_value">%1$d dp</string>
+    <string name="button_size_default_value">36 dp</string>
     <string name="privacy_statement">Screenshots stay on this device. CornerShot has no network access.</string>
     <string name="capture_content_description">Capture screenshot</string>
     <string name="save">Save</string>
