@@ -78,17 +78,60 @@
             android:textStyle="bold"
             android:textColor="?android:attr/textColorPrimary" />
 
-        <RadioGroup
-            android:id="@+id/corner_group"
+        <LinearLayout
+            android:id="@+id/corner_presets"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
             android:orientation="vertical">
-            <RadioButton android:id="@+id/corner_top_left" android:layout_width="match_parent" android:layout_height="48dp" android:text="@string/corner_top_left" />
-            <RadioButton android:id="@+id/corner_top_right" android:layout_width="match_parent" android:layout_height="48dp" android:text="@string/corner_top_right" />
-            <RadioButton android:id="@+id/corner_bottom_left" android:layout_width="match_parent" android:layout_height="48dp" android:text="@string/corner_bottom_left" />
-            <RadioButton android:id="@+id/corner_bottom_right" android:layout_width="match_parent" android:layout_height="48dp" android:text="@string/corner_bottom_right" />
-        </RadioGroup>
+            <LinearLayout
+                style="?android:attr/buttonBarStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                <Button
+                    style="?android:attr/buttonBarButtonStyle"
+                    android:id="@+id/corner_top_left"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_marginEnd="8dp"
+                    android:layout_weight="1"
+                    android:text="@string/corner_top_left"
+                    android:textAllCaps="false" />
+                <Button
+                    style="?android:attr/buttonBarButtonStyle"
+                    android:id="@+id/corner_top_right"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:text="@string/corner_top_right"
+                    android:textAllCaps="false" />
+            </LinearLayout>
+            <LinearLayout
+                style="?android:attr/buttonBarStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:orientation="horizontal">
+                <Button
+                    style="?android:attr/buttonBarButtonStyle"
+                    android:id="@+id/corner_bottom_left"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_marginEnd="8dp"
+                    android:layout_weight="1"
+                    android:text="@string/corner_bottom_left"
+                    android:textAllCaps="false" />
+                <Button
+                    style="?android:attr/buttonBarButtonStyle"
+                    android:id="@+id/corner_bottom_right"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:text="@string/corner_bottom_right"
+                    android:textAllCaps="false" />
+            </LinearLayout>
+        </LinearLayout>
 
         <TextView
             android:layout_width="match_parent"

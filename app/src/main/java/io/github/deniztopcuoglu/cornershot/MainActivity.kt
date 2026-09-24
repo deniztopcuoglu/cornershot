@@ -5,7 +5,6 @@ import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Button
-import android.widget.RadioGroup
 import android.widget.Switch
 import android.widget.TextView
 import android.view.View
@@ -33,7 +32,6 @@ class MainActivity : ComponentActivity() {
         captureSwitch = findViewById(R.id.capture_switch)
         serviceStatus = findViewById(R.id.service_status)
         val settingsButton: Button = findViewById(R.id.accessibility_settings)
-        val cornerGroup: RadioGroup = findViewById(R.id.corner_group)
 
         captureSwitch.setOnCheckedChangeListener { _, enabled ->
             if (refreshing) return@setOnCheckedChangeListener
@@ -49,26 +47,20 @@ class MainActivity : ComponentActivity() {
         }
 
         settingsButton.setOnClickListener { openAccessibilitySettings() }
-        cornerGroup.setOnCheckedChangeListener { _, checkedId ->
-            val corner = when (checkedId) {
-                R.id.corner_top_left -> CaptureCorner.TOP_LEFT
-                R.id.corner_top_right -> CaptureCorner.TOP_RIGHT
-                R.id.corner_bottom_left -> CaptureCorner.BOTTOM_LEFT
-                R.id.corner_bottom_right -> CaptureCorner.BOTTOM_RIGHT
-                else -> return@setOnCheckedChangeListener
-            }
-            AppPreferences.setCaptureCorner(this, corner)
-            if (AppPreferences.captureButtonEnabled(this) && isScreenshotServiceEnabled()) {
-                sendBroadcast(InternalActions.intent(this, InternalActions.SHOW_OVERLAY))
+        listOf(
+            R.id.corner_top_left to CaptureCorner.TOP_LEFT,
+            R.id.corner_top_right to CaptureCorner.TOP_RIGHT,
+            R.id.corner_bottom_left to CaptureCorner.BOTTOM_LEFT,
+            R.id.corner_bottom_right to CaptureCorner.BOTTOM_RIGHT
+        ).forEach { (buttonId, corner) ->
+            findViewById<Button>(buttonId).setOnClickListener {
+                AppPreferences.setOverlayPositionPreset(this, corner)
+                if (AppPreferences.captureButtonEnabled(this) && isScreenshotServiceEnabled()) {
+                    sendBroadcast(InternalActions.intent(this, InternalActions.SHOW_OVERLAY))
+                }
             }
         }
 
-        cornerGroup.check(when (AppPreferences.captureCorner(this)) {
-            CaptureCorner.TOP_LEFT -> R.id.corner_top_left
-            CaptureCorner.TOP_RIGHT -> R.id.corner_top_right
-            CaptureCorner.BOTTOM_LEFT -> R.id.corner_bottom_left
-            CaptureCorner.BOTTOM_RIGHT -> R.id.corner_bottom_right
-        })
         refreshUi()
     }
 
@@ -82,8 +74,11 @@ class MainActivity : ComponentActivity() {
 
     private fun refreshUi() {
         refreshing = true
-        captureSwitch.isChecked = AppPreferences.captureButtonEnabled(this)
-        refreshing = false
+        try {
+            captureSwitch.isChecked = AppPreferences.captureButtonEnabled(this)
+        } finally {
+            refreshing = false
+        }
         serviceStatus.setText(if (isScreenshotServiceEnabled()) R.string.service_enabled else R.string.service_disabled)
     }
 

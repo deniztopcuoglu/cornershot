@@ -7,7 +7,7 @@
     <string name="service_enabled">Enabled</string>
     <string name="service_disabled">Disabled</string>
     <string name="open_accessibility_settings">Open Accessibility Settings</string>
-    <string name="button_position">Button position</string>
+    <string name="button_position">Position presets</string>
     <string name="corner_top_left">Top Left</string>
     <string name="corner_top_right">Top Right</string>
     <string name="corner_bottom_left">Bottom Left</string>

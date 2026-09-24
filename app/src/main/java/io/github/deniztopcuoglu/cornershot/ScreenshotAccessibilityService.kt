@@ -90,6 +90,7 @@ class ScreenshotAccessibilityService : AccessibilityService() {
 
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
         super.onConfigurationChanged(newConfig)
+        floatingView?.cancelTouchState()
         refreshOverlay()
     }
 
@@ -104,6 +105,11 @@ class ScreenshotAccessibilityService : AccessibilityService() {
         connected = false
         if (captureInProgress && !selectionActivityLaunched) resetPreSelectionCapture()
         clearCaptureTimeout()
+        floatingView?.let { view ->
+            view.onDragPositionChanged = null
+            view.onDragReleased = null
+            view.onDragCancelled = null
+        }
         removeOverlay()
         if (receiverRegistered) {
             runCatching { unregisterReceiver(actionReceiver) }
@@ -120,9 +126,18 @@ class ScreenshotAccessibilityService : AccessibilityService() {
         }
         val view = floatingView ?: FloatingCaptureView(this).also { button ->
             button.setOnClickListener { beginCapture() }
+            button.onDragPositionChanged = { left, top -> updateOverlayPosition(button, left, top) }
+            button.onDragReleased = { position ->
+                if (floatingView === button) {
+                    AppPreferences.setNormalizedOverlayPosition(this, position)
+                }
+            }
+            button.onDragCancelled = {
+                if (floatingView === button) refreshOverlay()
+            }
             floatingView = button
         }
-        val params = view.windowLayoutParams(AppPreferences.captureCorner(this))
+        val params = view.windowLayoutParams(AppPreferences.normalizedOverlayPosition(this))
         try {
             if (view.isAttachedToWindow) windowManager.updateViewLayout(view, params)
             else windowManager.addView(view, params)
@@ -144,6 +159,22 @@ class ScreenshotAccessibilityService : AccessibilityService() {
             // The window may have detached during a service or display transition.
         } catch (_: IllegalStateException) {
             // A concurrent window teardown already removed it.
+        }
+    }
+
+    private fun updateOverlayPosition(view: FloatingCaptureView, left: Int, top: Int) {
+        if (!connected || captureInProgress || view !== floatingView || !view.isAttachedToWindow) return
+        try {
+            windowManager.updateViewLayout(view, view.draggedWindowLayoutParams(left, top))
+        } catch (_: WindowManager.BadTokenException) {
+            view.cancelTouchState()
+            refreshOverlay()
+        } catch (_: IllegalArgumentException) {
+            view.cancelTouchState()
+            refreshOverlay()
+        } catch (_: IllegalStateException) {
+            view.cancelTouchState()
+            refreshOverlay()
         }
     }
 

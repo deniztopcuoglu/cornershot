@@ -6,8 +6,8 @@ CornerShot is a small Android screenshot cropping tool. Its floating button capt
 
 1. Install and open CornerShot.
 2. Turn on **Capture button**. Android opens Accessibility Settings if the service needs enabling.
-3. Enable **CornerShot screenshot button**, return to CornerShot, and choose one of the four button corners.
-4. Leave CornerShot open in the background. Tap its floating screenshot button in any app, drag a rectangle, then choose **Save**, **Copy**, **Retry**, or **Cancel**.
+3. Enable **CornerShot screenshot button**, return to CornerShot, and optionally choose one of the four position presets.
+4. Leave CornerShot open in the background. Tap its floating screenshot button in any app, drag a rectangle, then choose **Save**, **Copy**, **Retry**, or **Cancel**. Long-press and drag the floating button itself to place it freely; its relative position is retained across display rotations and size changes.
 
 **Save** writes a PNG to `Pictures/Screenshots` with a `CornerShot_yyyyMMdd_HHmmss_SSS.png` filename. **Copy** places an image content URI on the clipboard without saving to Pictures. Its local cache file is retained for up to seven days and is subject to a bounded cache limit. **Retry** clears the selection on the same frozen screenshot. **Cancel** discards it.
 
