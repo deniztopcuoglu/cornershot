@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Button
+import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
 import android.view.View
@@ -16,6 +17,8 @@ import androidx.core.view.WindowInsetsCompat
 class MainActivity : ComponentActivity() {
     private lateinit var captureSwitch: Switch
     private lateinit var serviceStatus: TextView
+    private lateinit var buttonSizeSeekBar: SeekBar
+    private lateinit var buttonSizeValue: TextView
     private var refreshing = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -31,6 +34,8 @@ class MainActivity : ComponentActivity() {
         ViewCompat.requestApplyInsets(content)
         captureSwitch = findViewById(R.id.capture_switch)
         serviceStatus = findViewById(R.id.service_status)
+        buttonSizeSeekBar = findViewById(R.id.button_size_seekbar)
+        buttonSizeValue = findViewById(R.id.button_size_value)
         val settingsButton: Button = findViewById(R.id.accessibility_settings)
 
         captureSwitch.setOnCheckedChangeListener { _, enabled ->
@@ -61,6 +66,23 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        buttonSizeSeekBar.max =
+            (ButtonSizeGeometry.MAX_VISIBLE_DP - ButtonSizeGeometry.MIN_VISIBLE_DP) / ButtonSizeGeometry.STEP_DP
+        buttonSizeSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
+                val sizeDp = ButtonSizeGeometry.MIN_VISIBLE_DP + progress * ButtonSizeGeometry.STEP_DP
+                buttonSizeValue.text = getString(R.string.button_size_value, sizeDp)
+                if (!fromUser) return
+                AppPreferences.setCaptureButtonSizeDp(this@MainActivity, sizeDp)
+                if (AppPreferences.captureButtonEnabled(this@MainActivity)) {
+                    sendBroadcast(InternalActions.intent(this@MainActivity, InternalActions.SHOW_OVERLAY))
+                }
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar) = Unit
+            override fun onStopTrackingTouch(seekBar: SeekBar) = Unit
+        })
+
         refreshUi()
     }
 
@@ -80,6 +102,10 @@ class MainActivity : ComponentActivity() {
             refreshing = false
         }
         serviceStatus.setText(if (isScreenshotServiceEnabled()) R.string.service_enabled else R.string.service_disabled)
+        val sizeDp = AppPreferences.captureButtonSizeDp(this)
+        buttonSizeSeekBar.progress =
+            (sizeDp - ButtonSizeGeometry.MIN_VISIBLE_DP) / ButtonSizeGeometry.STEP_DP
+        buttonSizeValue.text = getString(R.string.button_size_value, sizeDp)
     }
 
     private fun isScreenshotServiceEnabled(): Boolean {

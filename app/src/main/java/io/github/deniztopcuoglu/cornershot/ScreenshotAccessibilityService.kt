@@ -124,6 +124,7 @@ class ScreenshotAccessibilityService : AccessibilityService() {
             removeOverlay()
             return
         }
+        val configuredSizeDp = AppPreferences.captureButtonSizeDp(this)
         val view = floatingView ?: FloatingCaptureView(this).also { button ->
             button.setOnClickListener { beginCapture() }
             button.onDragPositionChanged = { left, top -> updateOverlayPosition(button, left, top) }
@@ -137,6 +138,7 @@ class ScreenshotAccessibilityService : AccessibilityService() {
             }
             floatingView = button
         }
+        if (view.updateVisibleDiameterDp(configuredSizeDp)) view.cancelTouchState()
         val params = view.windowLayoutParams(AppPreferences.normalizedOverlayPosition(this))
         try {
             if (view.isAttachedToWindow) windowManager.updateViewLayout(view, params)

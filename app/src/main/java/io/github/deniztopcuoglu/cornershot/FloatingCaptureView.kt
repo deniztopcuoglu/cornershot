@@ -3,12 +3,14 @@ package io.github.deniztopcuoglu.cornershot
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.PixelFormat
+import android.graphics.drawable.InsetDrawable
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.WindowInsets
 import android.view.WindowManager
+import androidx.core.content.ContextCompat
 import kotlin.math.roundToInt
 
 internal class FloatingCaptureView(context: Context) : View(context) {
@@ -27,6 +29,7 @@ internal class FloatingCaptureView(context: Context) : View(context) {
     private var gestureBounds: UsableOverlayBounds? = null
     private var tapCancelled = false
     private var dragging = false
+    private var visibleDiameterDp = ButtonSizeGeometry.DEFAULT_VISIBLE_DP
 
     internal var onDragPositionChanged: ((left: Int, top: Int) -> Unit)? = null
     internal var onDragReleased: ((NormalizedOverlayPosition) -> Unit)? = null
@@ -37,7 +40,7 @@ internal class FloatingCaptureView(context: Context) : View(context) {
     }
 
     init {
-        setBackgroundResource(R.drawable.floating_button_background)
+        updateCircleBackground()
         alpha = RESTING_ALPHA
         contentDescription = context.getString(R.string.capture_content_description)
         isClickable = true
@@ -50,8 +53,9 @@ internal class FloatingCaptureView(context: Context) : View(context) {
     fun windowLayoutParams(position: NormalizedOverlayPosition): WindowManager.LayoutParams {
         val bounds = dragBounds()
         val pixelPosition = OverlayPositionGeometry.denormalize(position, bounds)
+        val targetSize = touchTargetSizePx()
         return createLayoutParams(
-            dp(BUTTON_SIZE_DP),
+            targetSize,
             Gravity.TOP or Gravity.LEFT,
             pixelPosition.x,
             pixelPosition.y
@@ -62,7 +66,17 @@ internal class FloatingCaptureView(context: Context) : View(context) {
     fun draggedWindowLayoutParams(left: Int, top: Int): WindowManager.LayoutParams {
         val bounds = dragBounds()
         val position = OverlayPositionGeometry.clamp(OverlayPosition(left, top), bounds)
-        return createLayoutParams(dp(BUTTON_SIZE_DP), Gravity.TOP or Gravity.LEFT, position.x, position.y)
+        val targetSize = touchTargetSizePx()
+        return createLayoutParams(targetSize, Gravity.TOP or Gravity.LEFT, position.x, position.y)
+    }
+
+    /** Updates the visible circle while leaving normalized position to be reapplied by the service. */
+    internal fun updateVisibleDiameterDp(sizeDp: Int): Boolean {
+        val sanitized = ButtonSizeGeometry.sanitizeVisibleSizeDp(sizeDp)
+        if (visibleDiameterDp == sanitized) return false
+        visibleDiameterDp = sanitized
+        updateCircleBackground()
+        return true
     }
 
     internal fun cancelTouchState() {
@@ -243,14 +257,28 @@ internal class FloatingCaptureView(context: Context) : View(context) {
         val maxMarginX = maxOf(dp(16), safeRight + dp(8))
         val minMarginY = maxOf(dp(48), safeTop + dp(8))
         val maxMarginY = maxOf(dp(48), safeBottom + dp(8))
-        val buttonSize = dp(BUTTON_SIZE_DP)
-        val furthestX = (screenWidth - buttonSize).coerceAtLeast(0)
-        val furthestY = (screenHeight - buttonSize).coerceAtLeast(0)
-        val minX = minMarginX.coerceIn(0, furthestX)
-        val maxX = (screenWidth - maxMarginX - buttonSize).coerceIn(minX, furthestX)
-        val minY = minMarginY.coerceIn(0, furthestY)
-        val maxY = (screenHeight - maxMarginY - buttonSize).coerceIn(minY, furthestY)
-        return UsableOverlayBounds(minX, maxX, minY, maxY)
+        val targetSize = touchTargetSizePx()
+        return OverlayPositionGeometry.usableBounds(
+            screenWidth = screenWidth,
+            screenHeight = screenHeight,
+            targetWidth = targetSize,
+            targetHeight = targetSize,
+            leftMargin = minMarginX,
+            topMargin = minMarginY,
+            rightMargin = maxMarginX,
+            bottomMargin = maxMarginY
+        )
+    }
+
+    private fun touchTargetSizePx(): Int = dp(ButtonSizeGeometry.touchTargetSizeDp(visibleDiameterDp))
+
+    private fun updateCircleBackground() {
+        val targetDp = ButtonSizeGeometry.touchTargetSizeDp(visibleDiameterDp)
+        val insetDp = (targetDp - visibleDiameterDp) / 2
+        val circle = requireNotNull(ContextCompat.getDrawable(context, R.drawable.floating_button_background))
+        background = InsetDrawable(circle, dp(insetDp))
+        requestLayout()
+        invalidate()
     }
 
     private fun createLayoutParams(size: Int, gravity: Int, x: Int, y: Int) =
@@ -271,7 +299,6 @@ internal class FloatingCaptureView(context: Context) : View(context) {
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density + 0.5f).toInt()
 
     companion object {
-        private const val BUTTON_SIZE_DP = 48
         private const val RESTING_ALPHA = 0.72f
         private const val DRAG_ALPHA = 0.9f
         private const val INVALID_POINTER = -1

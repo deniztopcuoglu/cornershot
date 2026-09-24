@@ -15,6 +15,26 @@ internal data class NormalizedOverlayPosition(val x: Float, val y: Float)
 
 /** Pure geometry for free overlay placement and persistence across display sizes. */
 internal object OverlayPositionGeometry {
+    /** Computes the valid top-left range for a target of the current size. */
+    fun usableBounds(
+        screenWidth: Int,
+        screenHeight: Int,
+        targetWidth: Int,
+        targetHeight: Int,
+        leftMargin: Int,
+        topMargin: Int,
+        rightMargin: Int,
+        bottomMargin: Int
+    ): UsableOverlayBounds {
+        val furthestX = (screenWidth - targetWidth).coerceAtLeast(0)
+        val furthestY = (screenHeight - targetHeight).coerceAtLeast(0)
+        val minX = leftMargin.coerceIn(0, furthestX)
+        val minY = topMargin.coerceIn(0, furthestY)
+        val maxX = (screenWidth - rightMargin - targetWidth).coerceIn(minX, furthestX)
+        val maxY = (screenHeight - bottomMargin - targetHeight).coerceIn(minY, furthestY)
+        return UsableOverlayBounds(minX, maxX, minY, maxY)
+    }
+
     fun clamp(position: OverlayPosition, bounds: UsableOverlayBounds): OverlayPosition = OverlayPosition(
         x = position.x.coerceIn(bounds.minX, bounds.maxX),
         y = position.y.coerceIn(bounds.minY, bounds.maxY)

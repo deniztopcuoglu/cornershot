@@ -22,6 +22,7 @@ object AppPreferences {
     private const val KEY_LEGACY_CAPTURE_CORNER = "capture_button_corner"
     private const val KEY_OVERLAY_X = "capture_button_normalized_x"
     private const val KEY_OVERLAY_Y = "capture_button_normalized_y"
+    private const val KEY_CAPTURE_BUTTON_SIZE_DP = "capture_button_size_dp"
     private const val KEY_CAPTURE_ACTIVE_AT = "capture_workflow_active_at"
     private const val KEY_SELECTION_LAUNCHED = "capture_selection_launched"
     private const val ACTIVE_TIMEOUT_MS = 12L * 60L * 60L * 1000L
@@ -32,6 +33,22 @@ object AppPreferences {
 
     fun setCaptureButtonEnabled(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_CAPTURE_ENABLED, enabled).apply()
+    }
+
+    fun captureButtonSizeDp(context: Context): Int {
+        val preferences = prefs(context)
+        val stored = preferences.getInt(KEY_CAPTURE_BUTTON_SIZE_DP, ButtonSizeGeometry.DEFAULT_VISIBLE_DP)
+        val sanitized = ButtonSizeGeometry.sanitizeVisibleSizeDp(stored)
+        if (stored != sanitized) {
+            preferences.edit { putInt(KEY_CAPTURE_BUTTON_SIZE_DP, sanitized) }
+        }
+        return sanitized
+    }
+
+    fun setCaptureButtonSizeDp(context: Context, sizeDp: Int) {
+        prefs(context).edit {
+            putInt(KEY_CAPTURE_BUTTON_SIZE_DP, ButtonSizeGeometry.sanitizeVisibleSizeDp(sizeDp))
+        }
     }
 
     internal fun normalizedOverlayPosition(context: Context): NormalizedOverlayPosition {
