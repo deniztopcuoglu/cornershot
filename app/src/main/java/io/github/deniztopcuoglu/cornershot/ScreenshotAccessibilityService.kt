@@ -1,26 +1,37 @@
 package io.github.deniztopcuoglu.cornershot
 
-import androidx.core.content.ContextCompat
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityService.ScreenshotResult
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.graphics.ColorSpace
 import android.hardware.HardwareBuffer
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
+import android.util.Log
 import android.view.Choreographer
 import android.view.Display
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+
+private enum class CaptureState {
+    IDLE,
+    CAPTURE_PREPARING,
+    CAPTURE_IN_PROGRESS,
+    RECOVERING,
+    SELECTION_ACTIVE
+}
 
 class ScreenshotAccessibilityService : AccessibilityService() {
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -28,8 +39,11 @@ class ScreenshotAccessibilityService : AccessibilityService() {
     private lateinit var worker: ExecutorService
     private var receiverRegistered = false
     private var connected = false
-    private var captureInProgress = false
-    private var selectionActivityLaunched = false
+    private var captureState = CaptureState.IDLE
+    private var captureGeneration = 0
+    private var captureStartedAt = 0L
+    private var pendingCaptureBarrier: Runnable? = null
+    private var logNextOverlayRestore = false
     private var floatingView: FloatingCaptureView? = null
     private var captureTimeout: Runnable? = null
 
@@ -39,11 +53,11 @@ class ScreenshotAccessibilityService : AccessibilityService() {
                 InternalActions.HIDE_OVERLAY -> removeOverlay()
                 InternalActions.SHOW_OVERLAY -> refreshOverlay()
                 InternalActions.CAPTURE_FINISHED -> {
-                    captureInProgress = false
-                    selectionActivityLaunched = false
-                    clearCaptureTimeout()
-                    AppPreferences.finishCaptureWorkflow(this@ScreenshotAccessibilityService)
-                    refreshOverlay()
+                    if (captureState == CaptureState.SELECTION_ACTIVE ||
+                        (captureState == CaptureState.IDLE && AppPreferences.selectionLaunched(this@ScreenshotAccessibilityService))
+                    ) {
+                        finishSelectionWorkflow()
+                    }
                 }
             }
         }
@@ -77,8 +91,17 @@ class ScreenshotAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         connected = true
-        if (!captureInProgress && AppPreferences.captureWorkflowStarted(this) && !AppPreferences.selectionLaunched(this)) {
-            AppPreferences.finishCaptureWorkflow(this)
+        if (captureState == CaptureState.IDLE && AppPreferences.captureWorkflowStarted(this)) {
+            if (!AppPreferences.captureWorkflowActive(this)) {
+                captureState = CaptureState.IDLE
+            } else if (AppPreferences.selectionLaunched(this)) {
+                captureState = CaptureState.SELECTION_ACTIVE
+            } else {
+                captureState = CaptureState.RECOVERING
+                scheduleOrphanedCaptureRecovery()
+            }
+        } else if (captureState == CaptureState.RECOVERING) {
+            scheduleOrphanedCaptureRecovery()
         }
         ScreenshotStore.cleanupStaleCache(this)
         refreshOverlay()
@@ -91,20 +114,41 @@ class ScreenshotAccessibilityService : AccessibilityService() {
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
         super.onConfigurationChanged(newConfig)
         floatingView?.cancelTouchState()
-        refreshOverlay()
+        if (captureState == CaptureState.CAPTURE_PREPARING) {
+            pendingCaptureBarrier?.let(mainHandler::removeCallbacks)
+            pendingCaptureBarrier = null
+            captureGeneration += 1
+            logCapture("display configuration changed; restarting removal barrier")
+            prepareCaptureOverlay(captureGeneration)
+        } else {
+            refreshOverlay()
+        }
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
         connected = false
-        if (captureInProgress && !selectionActivityLaunched) resetPreSelectionCapture()
+        if (captureState == CaptureState.CAPTURE_PREPARING) {
+            resetPreSelectionCapture()
+        } else if (captureState == CaptureState.CAPTURE_IN_PROGRESS) {
+            captureState = CaptureState.RECOVERING
+            clearCaptureTimeout()
+            scheduleOrphanedCaptureRecovery()
+        }
         removeOverlay()
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
         connected = false
-        if (captureInProgress && !selectionActivityLaunched) resetPreSelectionCapture()
+        if (captureState == CaptureState.CAPTURE_PREPARING) {
+            resetPreSelectionCapture()
+        } else if (captureState == CaptureState.CAPTURE_IN_PROGRESS) {
+            // The screenshot request has already crossed the service boundary; keep the
+            // persisted workflow gate so a replacement service cannot re-add the overlay.
+            captureState = CaptureState.RECOVERING
+        }
         clearCaptureTimeout()
+        invalidateCaptureBarrier()
         floatingView?.let { view ->
             view.onDragPositionChanged = null
             view.onDragReleased = null
@@ -120,7 +164,11 @@ class ScreenshotAccessibilityService : AccessibilityService() {
     }
 
     private fun refreshOverlay() {
-        if (!connected || !AppPreferences.captureButtonEnabled(this) || AppPreferences.captureWorkflowActive(this)) {
+        if (!connected ||
+            !AppPreferences.captureButtonEnabled(this) ||
+            captureState != CaptureState.IDLE ||
+            AppPreferences.captureWorkflowActive(this)
+        ) {
             removeOverlay()
             return
         }
@@ -142,7 +190,13 @@ class ScreenshotAccessibilityService : AccessibilityService() {
         val params = view.windowLayoutParams(AppPreferences.normalizedOverlayPosition(this))
         try {
             if (view.isAttachedToWindow) windowManager.updateViewLayout(view, params)
-            else windowManager.addView(view, params)
+            else {
+                windowManager.addView(view, params)
+                if (logNextOverlayRestore) {
+                    logCapture("overlay restored")
+                    logNextOverlayRestore = false
+                }
+            }
         } catch (_: WindowManager.BadTokenException) {
             removeOverlay()
         } catch (_: IllegalArgumentException) {
@@ -152,20 +206,29 @@ class ScreenshotAccessibilityService : AccessibilityService() {
         }
     }
 
-    private fun removeOverlay() {
-        val view = floatingView ?: return
-        if (!view.isAttachedToWindow) return
+    /** removeViewImmediate synchronously detaches the ViewRoot before the compositor barrier starts. */
+    private fun removeOverlay(): Boolean {
+        val view = floatingView ?: return true
+        if (!view.isAttachedToWindow) return true
+        if (captureState == CaptureState.CAPTURE_PREPARING) logCapture("overlay remove requested")
         try {
             windowManager.removeViewImmediate(view)
+        } catch (_: WindowManager.BadTokenException) {
+            // Verify detachment below; capture is aborted if WindowManager kept the surface attached.
         } catch (_: IllegalArgumentException) {
             // The window may have detached during a service or display transition.
         } catch (_: IllegalStateException) {
             // A concurrent window teardown already removed it.
+        } catch (_: RuntimeException) {
+            // Treat an unexpected WindowManager failure as a failed detach and retry safely.
         }
+        val detached = !view.isAttachedToWindow
+        if (captureState == CaptureState.CAPTURE_PREPARING) logCapture("overlay detached=$detached")
+        return detached
     }
 
     private fun updateOverlayPosition(view: FloatingCaptureView, left: Int, top: Int) {
-        if (!connected || captureInProgress || view !== floatingView || !view.isAttachedToWindow) return
+        if (!connected || captureState != CaptureState.IDLE || view !== floatingView || !view.isAttachedToWindow) return
         try {
             windowManager.updateViewLayout(view, view.draggedWindowLayoutParams(left, top))
         } catch (_: WindowManager.BadTokenException) {
@@ -181,36 +244,101 @@ class ScreenshotAccessibilityService : AccessibilityService() {
     }
 
     private fun beginCapture() {
-        if (captureInProgress || !connected) return
+        if (captureState != CaptureState.IDLE || !connected) return
         if (AppPreferences.captureWorkflowActive(this)) return
-        captureInProgress = true
-        selectionActivityLaunched = false
+        captureState = CaptureState.CAPTURE_PREPARING
+        captureStartedAt = SystemClock.uptimeMillis()
+        val generation = ++captureGeneration
+        logCapture("capture requested")
         AppPreferences.beginCaptureWorkflow(this)
         clearCaptureTimeout()
         captureTimeout = Runnable {
-            if (captureInProgress) failCapture(getString(R.string.capture_failed))
-        }.also { mainHandler.postDelayed(it, CAPTURE_TIMEOUT_MS) }
-        removeOverlay()
-
-        // Two vsync callbacks let WindowManager commit and render the removed overlay before capture.
-        val choreographer = Choreographer.getInstance()
-        fun waitForFrame(framesLeft: Int) {
-            choreographer.postFrameCallback {
-                if (framesLeft > 1) waitForFrame(framesLeft - 1) else requestScreenshot()
+            if (captureState == CaptureState.CAPTURE_PREPARING || captureState == CaptureState.CAPTURE_IN_PROGRESS) {
+                failCapture(getString(R.string.capture_failed))
             }
-        }
-        waitForFrame(2)
+        }.also { mainHandler.postDelayed(it, CAPTURE_TIMEOUT_MS) }
+        prepareCaptureOverlay(generation)
     }
 
+    private fun prepareCaptureOverlay(generation: Int, detachRetries: Int = 0, barrierRestarts: Int = 0) {
+        if (!isPreparing(generation)) return
+        if (!removeOverlay()) {
+            if (detachRetries >= MAX_DETACH_RETRIES) {
+                logCapture("overlay detach failed after retries")
+                failCapture(getString(R.string.capture_failed))
+            } else {
+                scheduleCaptureBarrier(DETACH_RETRY_DELAY_MS) {
+                    prepareCaptureOverlay(generation, detachRetries + 1, barrierRestarts)
+                }
+            }
+            return
+        }
+        awaitCompositorFrames(generation, frameNumber = 1, barrierRestarts = barrierRestarts)
+    }
+
+    private fun awaitCompositorFrames(generation: Int, frameNumber: Int, barrierRestarts: Int) {
+        if (!isPreparing(generation)) return
+        Choreographer.getInstance().postFrameCallback {
+            if (!isPreparing(generation)) return@postFrameCallback
+            logCapture("post-detach frame $frameNumber/$COMPOSITOR_FRAME_COUNT")
+            if (frameNumber < COMPOSITOR_FRAME_COUNT) {
+                awaitCompositorFrames(generation, frameNumber + 1, barrierRestarts)
+                return@postFrameCallback
+            }
+            scheduleCaptureBarrier(COMPOSITOR_SETTLE_DELAY_MS) {
+                if (!isPreparing(generation)) return@scheduleCaptureBarrier
+                Choreographer.getInstance().postFrameCallback settleFrame@{
+                    if (!isPreparing(generation)) return@settleFrame
+                    logCapture("post-settle frame")
+                    if (floatingView?.isAttachedToWindow == true) {
+                        if (barrierRestarts >= MAX_BARRIER_RESTARTS) {
+                            logCapture("overlay reattached during compositor settle")
+                            failCapture(getString(R.string.capture_failed))
+                        } else {
+                            logCapture("overlay reattached during settle; restarting barrier")
+                            prepareCaptureOverlay(generation, barrierRestarts = barrierRestarts + 1)
+                        }
+                        return@settleFrame
+                    }
+                    captureState = CaptureState.CAPTURE_IN_PROGRESS
+                    requestScreenshot()
+                }
+            }
+        }
+    }
+
+    private fun scheduleCaptureBarrier(delayMs: Long, action: () -> Unit) {
+        pendingCaptureBarrier?.let(mainHandler::removeCallbacks)
+        val runnable = Runnable {
+            pendingCaptureBarrier = null
+            action()
+        }
+        pendingCaptureBarrier = runnable
+        mainHandler.postDelayed(runnable, delayMs)
+    }
+
+    private fun isPreparing(generation: Int): Boolean =
+        captureState == CaptureState.CAPTURE_PREPARING && captureGeneration == generation
+
     private fun requestScreenshot() {
-        if (!captureInProgress) return
+        if (captureState != CaptureState.CAPTURE_IN_PROGRESS) return
+        if (floatingView?.isAttachedToWindow == true) {
+            logCapture("overlay attached at screenshot gate; restarting removal barrier")
+            captureState = CaptureState.CAPTURE_PREPARING
+            val generation = ++captureGeneration
+            prepareCaptureOverlay(generation)
+            return
+        }
+        logCapture("screenshot API invoked")
         try {
             takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : TakeScreenshotCallback {
                 override fun onSuccess(screenshot: ScreenshotResult) {
+                    logCapture("screenshot callback success")
                     processScreenshot(screenshot)
                 }
 
                 override fun onFailure(errorCode: Int) {
+                    logCapture("screenshot callback failure code=$errorCode")
                     failCapture(getString(R.string.capture_failed))
                 }
             })
@@ -221,6 +349,10 @@ class ScreenshotAccessibilityService : AccessibilityService() {
 
     private fun processScreenshot(screenshot: ScreenshotResult) {
         val hardwareBuffer: HardwareBuffer = screenshot.hardwareBuffer
+        if (captureState != CaptureState.CAPTURE_IN_PROGRESS || !connected) {
+            runCatching { hardwareBuffer.close() }
+            return
+        }
         val colorSpace: ColorSpace = screenshot.colorSpace
         try {
             worker.execute {
@@ -246,7 +378,7 @@ class ScreenshotAccessibilityService : AccessibilityService() {
                     bitmapCopy.recycle()
                     copiedBitmap = null
                     mainHandler.post {
-                        if (!captureInProgress || !connected) {
+                        if (captureState != CaptureState.CAPTURE_IN_PROGRESS || !connected) {
                             file.delete()
                             return@post
                         }
@@ -259,12 +391,13 @@ class ScreenshotAccessibilityService : AccessibilityService() {
                                         Intent.FLAG_GRANT_READ_URI_PERMISSION
                                 )
                             }
-                            selectionActivityLaunched = true
                             AppPreferences.markSelectionLaunched(this)
+                            captureState = CaptureState.SELECTION_ACTIVE
                             startActivity(launch)
                             clearCaptureTimeout()
                         } catch (_: RuntimeException) {
                             file.delete()
+                            captureState = CaptureState.CAPTURE_IN_PROGRESS
                             failCapture(getString(R.string.capture_failed))
                         }
                     }
@@ -284,20 +417,56 @@ class ScreenshotAccessibilityService : AccessibilityService() {
     }
 
     private fun failCapture(message: String) {
-        if (!captureInProgress) return
-        captureInProgress = false
-        selectionActivityLaunched = false
+        if (captureState == CaptureState.IDLE || captureState == CaptureState.SELECTION_ACTIVE) return
+        captureState = CaptureState.IDLE
+        invalidateCaptureBarrier()
         clearCaptureTimeout()
         AppPreferences.finishCaptureWorkflow(this)
+        logNextOverlayRestore = true
         refreshOverlay()
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 
     private fun resetPreSelectionCapture() {
-        captureInProgress = false
-        selectionActivityLaunched = false
+        captureState = CaptureState.IDLE
+        invalidateCaptureBarrier()
         clearCaptureTimeout()
         AppPreferences.finishCaptureWorkflow(this)
+    }
+
+    private fun scheduleOrphanedCaptureRecovery() {
+        clearCaptureTimeout()
+        captureTimeout = Runnable {
+            if (captureState == CaptureState.RECOVERING) {
+                captureState = CaptureState.IDLE
+                invalidateCaptureBarrier()
+                AppPreferences.finishCaptureWorkflow(this)
+                logNextOverlayRestore = true
+                refreshOverlay()
+            }
+        }.also { mainHandler.postDelayed(it, ORPHANED_CAPTURE_RECOVERY_MS) }
+    }
+
+    private fun finishSelectionWorkflow() {
+        captureState = CaptureState.IDLE
+        invalidateCaptureBarrier()
+        clearCaptureTimeout()
+        AppPreferences.finishCaptureWorkflow(this)
+        logNextOverlayRestore = true
+        refreshOverlay()
+    }
+
+    private fun invalidateCaptureBarrier() {
+        captureGeneration += 1
+        pendingCaptureBarrier?.let(mainHandler::removeCallbacks)
+        pendingCaptureBarrier = null
+    }
+
+    private fun logCapture(event: String) {
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+            val elapsed = if (captureStartedAt == 0L) 0L else SystemClock.uptimeMillis() - captureStartedAt
+            Log.d(CAPTURE_LOG_TAG, "t+${elapsed}ms $event")
+        }
     }
 
     private fun clearCaptureTimeout() {
@@ -307,5 +476,12 @@ class ScreenshotAccessibilityService : AccessibilityService() {
 
     companion object {
         private const val CAPTURE_TIMEOUT_MS = 60_000L
+        private const val ORPHANED_CAPTURE_RECOVERY_MS = 1_500L
+        private const val DETACH_RETRY_DELAY_MS = 16L
+        private const val MAX_DETACH_RETRIES = 3
+        private const val COMPOSITOR_FRAME_COUNT = 2
+        private const val COMPOSITOR_SETTLE_DELAY_MS = 32L
+        private const val MAX_BARRIER_RESTARTS = 2
+        private const val CAPTURE_LOG_TAG = "CornerShotCapture"
     }
 }
