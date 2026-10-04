@@ -1,53 +1,49 @@
 # CornerShot
 
-<table>
-  <tr>
-    <th align="center">Settings</th>
-    <th align="center">Select and crop</th>
-  </tr>
-  <tr>
-    <td><img src="assets/menu.png" alt="CornerShot settings screen" width="100%"></td>
-    <td><img src="assets/usage.png" alt="CornerShot selection menu over a browser screenshot" width="100%"></td>
-  </tr>
-</table>
+CornerShot is a small Android app for capturing and cropping part of the screen. A floating button starts a capture; draw a rectangle over the frozen image, then save the crop or copy it to the clipboard.
 
-CornerShot is a lightweight Android screenshot cropping tool. Tap its floating button while using another app, select a rectangle from the frozen screenshot, then save or copy the crop.
+| Settings | Select and crop |
+| --- | --- |
+| ![CornerShot settings screen](assets/menu.png) | ![CornerShot selection menu over a browser screenshot](assets/usage.png) |
 
 ## Features
 
-- Captures the current display with Android's `AccessibilityService.takeScreenshot()` API.
-- Shows an iconless floating circle above other apps. A quick tap captures; long-press and drag moves it freely.
-- Adjusts the visible button diameter from 24dp to 64dp in 2dp steps. The transparent touch target stays at least 48dp.
-- Stores the button's position relative to the usable display area, so it remains sensibly placed after rotation or display-size changes.
-- Offers four corner position presets as well as free placement.
-- Supports finger and S Pen selection, with **Save**, **Copy**, **Retry**, and **Cancel** actions.
+- Uses Android's `AccessibilityService.takeScreenshot()` API to capture the display.
+- Shows a floating circle above other apps. Tap it to capture; long-press and drag it to move it.
+- Set the visible button diameter from 24 dp to 64 dp, in 2 dp steps. Its touch target stays at least 48 dp.
+- Choose a corner preset or place the button freely. Its position is saved relative to the usable display area and adapts to rotation and display-size changes.
+- Select a crop with a finger or S Pen, then **Save**, **Copy**, **Retry**, or **Cancel**.
 
-## Get started
+## Use CornerShot
 
-1. Open CornerShot and turn on **Capture button**.
-2. If prompted, open Android Accessibility Settings and enable **CornerShot screenshot button**. Return to CornerShot.
-3. Optionally choose a position preset or adjust **Button size**. You can also reposition the floating circle later by long-pressing and dragging it.
-4. Switch to the app you want to capture and tap the floating circle. CornerShot hides the circle before capturing, then displays the screen as a frozen image.
-5. Drag a rectangle and choose an action from the selection menu.
+1. Install and open CornerShot.
+2. Turn on **Capture button**. When prompted, enable **CornerShot screenshot button** in Android Accessibility Settings, then return to the app.
+3. Optionally set a corner preset or button size. Move the button by long-pressing and dragging it.
+4. Open the screen you want to capture and tap the floating button. CornerShot hides the button while it captures, then opens the screenshot for selection.
+5. Drag over the area to crop and choose an action.
 
-**Save** writes a PNG to `Pictures/Screenshots`, named `CornerShot_yyyyMMdd_HHmmss_SSS.png`.
+**Save** writes a PNG to `Pictures/Screenshots`, named `CornerShot_yyyyMMdd_HHmmss_SSS.png`. **Copy** places the crop on the clipboard as image content; its temporary cache file is retained for up to seven days and bounded by a cache size limit. **Retry** clears the selection on the same captured image. **Cancel** discards it. Back clears an active selection or exits the capture screen when no selection is active.
 
-**Copy** puts the crop on the clipboard as image content without saving it to Pictures. Its local cache file is retained for up to seven days and bounded by a cache size limit.
+## Privacy and permissions
 
-**Retry** clears the rectangle and lets you select again from the same frozen screenshot. **Cancel** discards the selection. Back clears an active selection or exits the capture screen when no selection is active.
+Screenshots are processed locally and stay on the device unless you save or copy a crop. CornerShot has no `INTERNET` permission and includes no accounts, ads, analytics, telemetry, cloud sync, or remote assets.
 
-## Privacy and Accessibility
-
-Screenshots are processed locally and remain on the device unless you choose to save or copy a crop. CornerShot has no `INTERNET` permission and includes no network access, accounts, ads, analytics, telemetry, cloud sync, or remote assets.
-
-Android requires an enabled AccessibilityService for screenshot capture and the `TYPE_ACCESSIBILITY_OVERLAY` floating button. CornerShot uses Accessibility access only to take a screenshot after you tap its button and to display that button. It does not inspect accessibility content, retrieve window content, inject gestures, or filter keys. Its service configuration sets `canTakeScreenshot=true` and `canRetrieveWindowContent=false`.
-
-Android prevents screenshots of apps or windows marked secure with `FLAG_SECURE`. CornerShot reports the failure and does not attempt to bypass this restriction.
+Android requires an enabled Accessibility service for screenshot capture and the floating button. CornerShot uses this access to capture only after you tap the button and to display the button. It does not read accessibility content, inject gestures, or filter keys. The service allows screenshots but does not allow retrieval of window content. Android blocks screenshots of secure windows (`FLAG_SECURE`); CornerShot reports the failure and does not bypass that restriction.
 
 ## Build
 
-(Test) The project uses Kotlin/JVM 17, Gradle 8.13, Android Gradle Plugin 8.13.0, and Android SDK Platform 36. With JDK 17 and Android SDK Platform 36 installed, build the debug APK from the project root:
+Requirements: JDK 17 and Android SDK Platform 36. The project uses Gradle 8.13, Android Gradle Plugin 8.13.0, Kotlin 2.2.20, and targets Android 16 (API 36).
+
+Build the debug APK from the project root:
 
 ```sh
 ./gradlew :app:assembleDebug
 ```
+
+The Gradle output is `app/build/outputs/apk/debug/app-debug.apk`. To reproduce the versioned release artifact in the project root:
+
+```sh
+cp app/build/outputs/apk/debug/app-debug.apk CornerShot-v0.1.0.apk
+```
+
+Run the unit tests with `./gradlew :app:testDebugUnitTest`.
