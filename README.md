@@ -46,7 +46,7 @@ Android prevents screenshots of apps or windows marked secure with `FLAG_SECURE`
 
 ## Build
 
-The project uses Kotlin/JVM 17, Gradle 8.13, Android Gradle Plugin 8.13.0, and Android SDK Platform 36. With JDK 17 and Android SDK Platform 36 installed, build the debug APK from the project root:
+(Test) The project uses Kotlin/JVM 17, Gradle 8.13, Android Gradle Plugin 8.13.0, and Android SDK Platform 36. With JDK 17 and Android SDK Platform 36 installed, build the debug APK from the project root:
 
 ```sh
 ./gradlew :app:assembleDebug
