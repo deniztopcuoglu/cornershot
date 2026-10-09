@@ -40,10 +40,4 @@ Build the debug APK from the project root:
 ./gradlew :app:assembleDebug
 ```
 
-The Gradle output is `app/build/outputs/apk/debug/app-debug.apk`. To reproduce the versioned release artifact in the project root:
-
-```sh
-cp app/build/outputs/apk/debug/app-debug.apk CornerShot-v0.1.0.apk
-```
-
 Run the unit tests with `./gradlew :app:testDebugUnitTest`.
